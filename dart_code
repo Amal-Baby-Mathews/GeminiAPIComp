@@ -1,0 +1,136 @@
+//This code was created by DartPad.com
+import 'dart:convert';
+import 'dart:io';
+import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'package:image_picker/image_picker.dart';
+
+void main() {
+  runApp(ChatBotApp());
+}
+
+// Define the base URL as a variable
+const String baseUrl = 'https://c5df-34-82-131-61.ngrok-free.app/chat';
+
+class ChatBotApp extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'Chat Bot',
+      home: ChatScreen(),
+      theme: ThemeData(
+        primarySwatch: Colors.blue,
+      ),
+    );
+  }
+}
+
+class ChatScreen extends StatefulWidget {
+  @override
+  _ChatScreenState createState() => _ChatScreenState();
+}
+
+class _ChatScreenState extends State<ChatScreen> {
+  final TextEditingController _controller = TextEditingController();
+  List<String> messages = [];
+  File? _selectedImage;
+
+  Future<void> sendMessage() async {
+    String userInput = _controller.text;
+    if (userInput.isEmpty && _selectedImage == null) return;
+
+    // Add user message
+    setState(() {
+      if (userInput.isNotEmpty) {
+        messages.add('You: $userInput');
+      }
+      _controller.clear();
+    });
+
+    // Prepare the payload
+    String imagePath = _selectedImage?.path ?? '';
+    var payload = jsonEncode({
+      "user_input": [userInput],
+      "image_path": imagePath,
+    });
+
+    // Send the request
+    final response = await http.post(
+      Uri.parse(baseUrl),  // Use the base URL variable
+      headers: {'Content-Type': 'application/json'},
+      body: payload,
+    );
+
+    if (response.statusCode == 200) {
+      var data = jsonDecode(response.body);
+      String botResponse = data['llm_output'];
+
+      setState(() {
+        messages.add('Bot: $botResponse');
+        _selectedImage = null; // Reset image after sending
+      });
+    } else {
+      setState(() {
+        messages.add('Bot: Error ${response.statusCode}');
+      });
+    }
+  }
+
+  Future<void> selectImage() async {
+    final picker = ImagePicker();
+    final pickedFile = await picker.getImage(source: ImageSource.gallery);
+
+    if (pickedFile != null) {
+      setState(() {
+        _selectedImage = File(pickedFile.path);
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('Chat Bot'),
+      ),
+      body: Column(
+        children: [
+          Expanded(
+            child: ListView.builder(
+              itemCount: messages.length,
+              itemBuilder: (context, index) {
+                return ListTile(
+                  title: Text(messages[index]),
+                );
+              },
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(8.0),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _controller,
+                    decoration: InputDecoration(
+                      hintText: 'Type your message',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                ),
+                IconButton(
+                  icon: Icon(Icons.image),
+                  onPressed: selectImage,
+                ),
+                IconButton(
+                  icon: Icon(Icons.send),
+                  onPressed: sendMessage,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
